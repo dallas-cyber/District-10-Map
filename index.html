@@ -22,7 +22,7 @@
       left: 50%;
       transform: translateX(-50%);
       z-index: 9999;
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(255,255,255,0.95);
       border: 1px solid #ddd;
       padding: 8px 12px;
       border-radius: 10px;
@@ -33,7 +33,7 @@
       box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     }
 
-    /* Copyright label (bottom-right) */
+    /* Copyright bottom-right */
     #copyright {
       position: fixed;
       bottom: 6px;
@@ -41,7 +41,7 @@
       z-index: 5000;
       font: 11px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color: #555;
-      background: rgba(255, 255, 255, 0.75);
+      background: rgba(255,255,255,0.75);
       padding: 3px 6px;
       border-radius: 4px;
       pointer-events: none;
@@ -57,10 +57,11 @@
       font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       cursor: pointer;
       box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+      white-space: nowrap;
     }
     .map-btn:active { transform: translateY(1px); }
 
-    /* Reset button (bottom center, only shows when district not visible) */
+    /* Reset bottom-center */
     #resetBtn {
       position: fixed;
       bottom: 12px;
@@ -70,87 +71,58 @@
       display: none;
     }
 
-    /* Location button (bottom-left) */
-    #controls {
-      position: fixed;
-      bottom: 12px;
-      left: 10px;
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      align-items: flex-start;
-    }
-
-    /* --- Custom Search Control (top-left) --- */
-    #searchControl {
+    /* ---- TOP BAR: Search + Location ---- */
+    #topBar {
       position: fixed;
       top: 12px;
       left: 12px;
       z-index: 9999;
-      width: min(86vw, 380px);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    /* Search container holds both toggle and panel, so width changes push location button over */
+    #searchControl {
+      width: min(86vw, 420px);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
     #searchToggle {
       display: inline-flex;
-      align-items: center;
-      gap: 8px;
     }
 
     #searchPanel {
       display: none;
       background: rgba(255,255,255,0.92);
       border: 1px solid #ddd;
-      border-radius: 12px;
+      border-radius: 14px;
       box-shadow: 0 10px 22px rgba(0,0,0,0.10);
       overflow: hidden;
     }
 
-    /* Top bar inside panel (Close button) */
-    #panelTop {
-      display: flex;
-      justify-content: flex-end;
-      border-bottom: 1px solid rgba(0,0,0,0.07);
-      background: rgba(255,255,255,0.70);
-    }
-
-    #closeSearch {
-      border: 0;
-      background: transparent;
-      padding: 8px 10px;
-      cursor: pointer;
-      font-size: 16px;
-      line-height: 1;
-      color: #333;
-    }
-
-    /* Input row with Go button */
+    /* Top bar = input + Go */
     #searchRow {
       display: flex;
       align-items: center;
-      gap: 0;
     }
 
     #searchInput {
       flex: 1;
-      width: 100%;
-      box-sizing: border-box;
-      border: 0;
+      border: none;
       outline: none;
-      padding: 10px 12px;
+      padding: 12px 14px;
       font-size: 14px;
       background: transparent;
     }
 
     #goBtn {
-      border: 0;
+      border: none;
       border-left: 1px solid rgba(0,0,0,0.08);
-      background: rgba(255,255,255,0.0);
-      padding: 10px 12px;
-      font-size: 13px;
+      padding: 12px 14px;
+      background: transparent;
       cursor: pointer;
-      color: #333;
+      font-size: 13px;
     }
 
     #goBtn:hover { background: rgba(0,0,0,0.04); }
@@ -163,7 +135,7 @@
     }
 
     .suggestion {
-      padding: 10px 12px;
+      padding: 10px 14px;
       font-size: 13px;
       cursor: pointer;
       line-height: 1.25;
@@ -172,7 +144,7 @@
     .suggestion:hover { background: rgba(0,0,0,0.05); }
 
     .hint {
-      padding: 8px 12px;
+      padding: 8px 14px;
       font-size: 12px;
       color: #666;
       border-top: 1px solid rgba(0,0,0,0.07);
@@ -184,32 +156,26 @@
   <div id="msg"></div>
   <div id="map"></div>
 
-  <!-- Custom Search -->
-  <div id="searchControl">
-    <button id="searchToggle" class="map-btn" type="button">Search</button>
+  <!-- Top bar: Search + Location -->
+  <div id="topBar">
+    <div id="searchControl">
+      <button id="searchToggle" class="map-btn" type="button">Search</button>
 
-    <div id="searchPanel" aria-label="Search panel">
-      <div id="panelTop">
-        <button id="closeSearch" type="button" aria-label="Close search">✕</button>
+      <div id="searchPanel" aria-label="Search panel">
+        <div id="searchRow">
+          <input id="searchInput" type="text" placeholder="Search address or place…" autocomplete="off" />
+          <button id="goBtn" type="button" aria-label="Go">Go</button>
+        </div>
+        <div id="suggestions"></div>
+        <div class="hint">Tip: Click a suggestion or press Go</div>
       </div>
-
-      <div id="searchRow">
-        <input id="searchInput" type="text" placeholder="Search address or place…" autocomplete="off" />
-        <button id="goBtn" type="button" aria-label="Go">Go</button>
-      </div>
-
-      <div id="suggestions"></div>
-      <div class="hint">Tip: Click a suggestion or press Go</div>
     </div>
-  </div>
 
-  <!-- Bottom center reset -->
-  <button id="resetBtn" class="map-btn" type="button">Reset to District 10</button>
-
-  <!-- Bottom-left controls -->
-  <div id="controls">
     <button id="locBtn" class="map-btn" type="button">Use My Location</button>
   </div>
+
+  <!-- Reset -->
+  <button id="resetBtn" class="map-btn" type="button">Reset to District 10</button>
 
   <div id="copyright">© Wong For Congress</div>
 
@@ -231,7 +197,6 @@
       zoomControl: false
     });
     L.control.zoom({ position: "topright" }).addTo(map);
-
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png").addTo(map);
 
     // ---- District data ----
@@ -325,37 +290,44 @@
       updateResetVisibility();
     }
 
-    // ---- Custom Search UI + Suggestions ----
+    // ---- Search UI + Suggestions ----
     const searchToggle = document.getElementById("searchToggle");
     const searchPanel  = document.getElementById("searchPanel");
-    const closeSearch  = document.getElementById("closeSearch");
     const searchInput  = document.getElementById("searchInput");
     const suggestions  = document.getElementById("suggestions");
     const goBtn        = document.getElementById("goBtn");
+    const topBar       = document.getElementById("topBar");
+    const searchControl = document.getElementById("searchControl");
 
     let lastResults = [];
     let debounceTimer = null;
-
-    function openSearch() {
-      searchToggle.style.display = "none";     // ✅ hide the initial Search button
-      searchPanel.style.display = "block";
-      setTimeout(() => searchInput.focus(), 0);
-    }
-
-    function closeSearchPanel() {
-      searchPanel.style.display = "none";
-      searchToggle.style.display = "inline-flex"; // ✅ bring Search button back
-      clearSuggestions();
-    }
-
-    searchToggle.addEventListener("click", openSearch);
-    closeSearch.addEventListener("click", closeSearchPanel);
 
     function clearSuggestions() {
       suggestions.innerHTML = "";
       suggestions.style.display = "none";
       lastResults = [];
     }
+
+    function openSearch() {
+      searchToggle.style.display = "none";
+      searchPanel.style.display = "block";
+      setTimeout(() => searchInput.focus(), 0);
+    }
+
+    function closeSearchPanel() {
+      searchPanel.style.display = "none";
+      searchToggle.style.display = "inline-flex";
+      clearSuggestions();
+    }
+
+    searchToggle.addEventListener("click", openSearch);
+
+    // Click off: close panel and suggestions
+    document.addEventListener("mousedown", (e) => {
+      if (!topBar.contains(e.target)) {
+        closeSearchPanel();
+      }
+    });
 
     function renderSuggestions(results) {
       lastResults = results || [];
@@ -441,13 +413,7 @@
 
     goBtn.addEventListener("click", doGoSearch);
 
-    // If user clicks outside, just hide suggestions (panel stays open)
-    document.addEventListener("mousedown", (e) => {
-      const inside = document.getElementById("searchControl").contains(e.target);
-      if (!inside) clearSuggestions();
-    });
-
-    // ---- Use My Location ----
+    // ---- Use My Location (now top bar right of Search) ----
     document.getElementById("locBtn").addEventListener("click", () => {
       if (!navigator.geolocation) {
         showMsg("Geolocation isn’t supported on this device/browser.");
