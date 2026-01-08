@@ -8,17 +8,14 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  <!-- Leaflet Geocoder -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-
   <!-- Turf.js -->
   <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
   <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-    #map { position: fixed; inset: 0; width: 100%; height: 100%; }
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
+    #map { position:fixed; inset:0; width:100%; height:100%; }
 
+    /* Message bubble */
     #msg {
       position: fixed;
       top: 12px;
@@ -36,6 +33,7 @@
       box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     }
 
+    /* Copyright label */
     #copyright {
       position: fixed;
       bottom: 6px;
@@ -49,23 +47,11 @@
       pointer-events: none;
     }
 
-    /* Geocoder icon -> "Search" text */
-    .leaflet-control-geocoder-icon {
-      width: auto !important;
-      background: none !important;
-      text-indent: 0 !important;
-    }
-    .leaflet-control-geocoder-icon::after {
-      content: "Search";
-      font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: #333;
-      padding: 4px 8px;
-    }
-
+    /* Shared button styling */
     .map-btn {
       appearance: none;
       border: 1px solid rgba(208, 208, 208, 0.95);
-      background: rgba(255, 255, 255, 0.75);
+      background: rgba(255, 255, 255, 0.75); /* slightly transparent */
       padding: 8px 10px;
       border-radius: 10px;
       font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -95,6 +81,67 @@
       gap: 8px;
       align-items: flex-end;
     }
+
+    /* --- Custom Search Control (top-left) --- */
+    #searchControl {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 9999;
+      width: min(86vw, 360px);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    #searchToggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #searchPanel {
+      margin-top: 8px;
+      display: none;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      box-shadow: 0 10px 22px rgba(0,0,0,0.10);
+      overflow: hidden;
+    }
+
+    #searchInput {
+      width: 100%;
+      box-sizing: border-box;
+      border: 0;
+      outline: none;
+      padding: 10px 12px;
+      font-size: 14px;
+      background: transparent;
+    }
+
+    #suggestions {
+      border-top: 1px solid rgba(0,0,0,0.07);
+      max-height: 220px;
+      overflow: auto;
+      display: none;
+    }
+
+    .suggestion {
+      padding: 10px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      line-height: 1.25;
+    }
+
+    .suggestion:hover {
+      background: rgba(0,0,0,0.05);
+    }
+
+    .hint {
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #666;
+      border-top: 1px solid rgba(0,0,0,0.07);
+    }
   </style>
 </head>
 
@@ -102,8 +149,21 @@
   <div id="msg"></div>
   <div id="map"></div>
 
+  <!-- Custom Search -->
+  <div id="searchControl">
+    <button id="searchToggle" class="map-btn" type="button">Search</button>
+
+    <div id="searchPanel" aria-label="Search panel">
+      <input id="searchInput" type="text" placeholder="Search address or place…" autocomplete="off" />
+      <div id="suggestions"></div>
+      <div class="hint">Tip: Click a suggestion or press Enter.</div>
+    </div>
+  </div>
+
+  <!-- Bottom center reset -->
   <button id="resetBtn" class="map-btn" type="button">Reset to District 10</button>
 
+  <!-- Bottom-right controls -->
   <div id="controls">
     <button id="locBtn" class="map-btn" type="button">Use My Location</button>
   </div>
@@ -111,9 +171,9 @@
   <div id="copyright">© Wong For Congress</div>
 
   <script>
+    // ---- Message helpers ----
     const msgEl = document.getElementById("msg");
     let msgTimer = null;
-
     function showMsg(text, ms = 3500) {
       msgEl.textContent = text;
       msgEl.style.display = "block";
@@ -121,12 +181,15 @@
       msgTimer = setTimeout(() => msgEl.style.display = "none", ms);
     }
 
+    // ---- Map init ----
     const map = L.map("map", { scrollWheelZoom: false, attributionControl: false });
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png").addTo(map);
 
+    // ---- District data ----
     let districtFeature = null;
     let districtBounds = null;
 
+    // ---- Marker (single marker reused) ----
     let marker = null;
     function placeMarker(latlng, color) {
       if (marker) map.removeLayer(marker);
@@ -145,88 +208,15 @@
       return turf.booleanPointInPolygon(pt, districtFeature);
     }
 
+    // ---- Reset visibility logic ----
     const resetBtn = document.getElementById("resetBtn");
     function updateResetVisibility() {
       if (!districtBounds) return;
-      resetBtn.style.display = map.getBounds().intersects(districtBounds) ? "none" : "block";
+      const districtVisible = map.getBounds().intersects(districtBounds);
+      resetBtn.style.display = districtVisible ? "none" : "block";
     }
     map.on("moveend zoomend", updateResetVisibility);
 
-    // ---- COMMIT GATE ----
-    // Only run markgeocode logic if user pressed Enter OR clicked a suggestion.
-    let userCommitted = false;
-
-    function withCommit(fn) {
-      return function(...args) {
-        if (!userCommitted) return;          // ignore auto-fired results
-        userCommitted = false;              // consume the commit
-        return fn.apply(this, args);
-      };
-    }
-
-    // ---- Geocoder ----
-    const geocoderControl = L.Control.geocoder({
-      placeholder: "Search address or place…",
-      defaultMarkGeocode: false,
-      collapsed: true,
-      expand: "click",
-
-      // Suggestions while typing:
-      suggestMinLength: 3,
-      suggestTimeout: 250,
-
-      // Try to avoid “auto-pick the only option” behavior:
-      showUniqueResult: false,
-
-      geocoder: L.Control.Geocoder.nominatim({
-        geocodingQueryParams: { countrycodes: "us", statecodes: "va" }
-      })
-    })
-    .on("markgeocode", withCommit((e) => {
-      const center = e.geocode.center;
-      const latlng = L.latLng(center.lat, center.lng);
-
-      if (!districtFeature) {
-        map.fitBounds(e.geocode.bbox);
-        return;
-      }
-
-      const inside = checkPoint(latlng);
-
-      if (inside) {
-        showMsg("✅ That’s in District 10.");
-        placeMarker(latlng, "#1e6cff");
-        map.fitBounds(e.geocode.bbox);
-      } else {
-        showMsg("Looks like that’s not in District 10. Try searching again.");
-        placeMarker(latlng, "#d93025");
-        map.panTo(latlng, { animate: true });
-      }
-
-      updateResetVisibility();
-    }))
-    .addTo(map);
-
-    // Hook Enter + dropdown click to set userCommitted = true
-    (function wireCommitTriggers() {
-      const input = geocoderControl && geocoderControl._input;
-      if (input) {
-        input.addEventListener("keydown", (ev) => {
-          if (ev.key === "Enter") userCommitted = true;
-        });
-      }
-
-      // Dropdown suggestions container (event delegation)
-      const container = geocoderControl && geocoderControl.getContainer && geocoderControl.getContainer();
-      if (container) {
-        container.addEventListener("mousedown", (ev) => {
-          const alt = ev.target && ev.target.closest && ev.target.closest(".leaflet-control-geocoder-alternatives a");
-          if (alt) userCommitted = true;
-        }, true);
-      }
-    })();
-
-    // ---- Buttons ----
     resetBtn.addEventListener("click", () => {
       if (districtBounds) {
         map.fitBounds(districtBounds);
@@ -236,6 +226,182 @@
       }
     });
 
+    // ---- Apply a chosen geocode result (ONLY called on click/Enter) ----
+    function applyGeocodeResult(result) {
+      if (!result) return;
+
+      const lat = Number(result.lat);
+      const lon = Number(result.lon);
+      const latlng = L.latLng(lat, lon);
+
+      // Build bounds if we have them
+      if (result.boundingbox && result.boundingbox.length === 4) {
+        const bb = result.boundingbox.map(Number); // [south, north, west, east]
+        const bounds = L.latLngBounds(
+          L.latLng(bb[0], bb[2]),
+          L.latLng(bb[1], bb[3])
+        );
+        // inside -> fit bounds, outside -> pan only
+        if (!districtFeature) {
+          map.fitBounds(bounds);
+          return;
+        }
+
+        const inside = checkPoint(latlng);
+        if (inside) {
+          showMsg("✅ That’s in District 10.");
+          placeMarker(latlng, "#1e6cff");
+          map.fitBounds(bounds);
+        } else {
+          showMsg("Looks like that’s not in District 10. Try searching again.");
+          placeMarker(latlng, "#d93025");
+          map.panTo(latlng, { animate: true });
+        }
+      } else {
+        // Fallback if no bbox
+        if (!districtFeature) {
+          map.setView(latlng, 13);
+          return;
+        }
+        const inside = checkPoint(latlng);
+        if (inside) {
+          showMsg("✅ That’s in District 10.");
+          placeMarker(latlng, "#1e6cff");
+          map.setView(latlng, 13);
+        } else {
+          showMsg("Looks like that’s not in District 10. Try searching again.");
+          placeMarker(latlng, "#d93025");
+          map.panTo(latlng, { animate: true });
+        }
+      }
+
+      updateResetVisibility();
+    }
+
+    // ---- Custom Search UI + Suggestions ----
+    const searchToggle = document.getElementById("searchToggle");
+    const searchPanel  = document.getElementById("searchPanel");
+    const searchInput  = document.getElementById("searchInput");
+    const suggestions  = document.getElementById("suggestions");
+
+    let lastResults = [];
+    let debounceTimer = null;
+
+    function openSearch() {
+      searchPanel.style.display = "block";
+      setTimeout(() => searchInput.focus(), 0);
+    }
+    function toggleSearch() {
+      const open = searchPanel.style.display === "block";
+      searchPanel.style.display = open ? "none" : "block";
+      if (!open) setTimeout(() => searchInput.focus(), 0);
+    }
+    searchToggle.addEventListener("click", toggleSearch);
+
+    function clearSuggestions() {
+      suggestions.innerHTML = "";
+      suggestions.style.display = "none";
+      lastResults = [];
+    }
+
+    function renderSuggestions(results) {
+      lastResults = results || [];
+      suggestions.innerHTML = "";
+
+      if (!lastResults.length) {
+        suggestions.style.display = "none";
+        return;
+      }
+
+      for (const r of lastResults) {
+        const div = document.createElement("div");
+        div.className = "suggestion";
+        div.textContent = r.display_name || "Result";
+        div.addEventListener("click", () => {
+          applyGeocodeResult(r); // ✅ only apply on click
+          // keep panel open or close it? closing is less clutter
+          searchPanel.style.display = "none";
+          clearSuggestions();
+        });
+        suggestions.appendChild(div);
+      }
+
+      suggestions.style.display = "block";
+    }
+
+    async function fetchSuggestions(query) {
+      // Virginia-ish viewbox, to keep results sane
+      const VA_VIEWBOX = "-83.675,39.466,-75.242,36.540"; // left,top,right,bottom
+      const url =
+        "https://nominatim.openstreetmap.org/search" +
+        "?format=json&addressdetails=1&limit=6" +
+        "&countrycodes=us" +
+        "&bounded=1" +
+        "&viewbox=" + encodeURIComponent(VA_VIEWBOX) +
+        "&q=" + encodeURIComponent(query);
+
+      const res = await fetch(url, {
+        headers: { "Accept": "application/json" }
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    }
+
+    searchInput.addEventListener("input", () => {
+      const q = searchInput.value.trim();
+      clearTimeout(debounceTimer);
+
+      if (q.length < 3) {
+        clearSuggestions();
+        return;
+      }
+
+      debounceTimer = setTimeout(async () => {
+        try {
+          const results = await fetchSuggestions(q);
+          // Suggestions update while typing, but do NOT apply
+          renderSuggestions(results);
+        } catch (e) {
+          // silently fail; better than spamming users with errors
+          clearSuggestions();
+        }
+      }, 300);
+    });
+
+    // Enter: apply top suggestion if available, otherwise do a one-off search
+    searchInput.addEventListener("keydown", async (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+
+      const q = searchInput.value.trim();
+      if (q.length < 3) return;
+
+      // If suggestions exist, apply the first one on Enter (explicit user action)
+      if (lastResults.length) {
+        applyGeocodeResult(lastResults[0]);
+        searchPanel.style.display = "none";
+        clearSuggestions();
+        return;
+      }
+
+      // Otherwise, do a one-time lookup and apply top hit (still Enter-driven)
+      try {
+        const results = await fetchSuggestions(q);
+        if (results && results.length) {
+          applyGeocodeResult(results[0]);
+          searchPanel.style.display = "none";
+          clearSuggestions();
+        }
+      } catch (e2) {}
+    });
+
+    // Close suggestions if user clicks outside the search panel
+    document.addEventListener("mousedown", (e) => {
+      const inside = document.getElementById("searchControl").contains(e.target);
+      if (!inside) clearSuggestions();
+    });
+
+    // ---- Use My Location ----
     document.getElementById("locBtn").addEventListener("click", () => {
       if (!navigator.geolocation) {
         showMsg("Geolocation isn’t supported on this device/browser.");
@@ -282,7 +448,8 @@
     fetch(geojsonUrl)
       .then(res => res.json())
       .then(data => {
-        districtFeature = data.features && data.features[0];
+        const feat = data.features && data.features[0];
+        districtFeature = feat;
 
         if (!districtFeature) {
           showMsg("District boundary failed to load.");
@@ -290,7 +457,12 @@
         }
 
         const layer = L.geoJSON(data, {
-          style: { color: "#696b6d", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
+          style: {
+            color: "#696b6d",
+            weight: 2,
+            opacity: 0.8,
+            fillOpacity: 0.1
+          }
         }).addTo(map);
 
         districtBounds = layer.getBounds();
