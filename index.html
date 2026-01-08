@@ -82,15 +82,19 @@
       gap: 10px;
     }
 
-    /* Search container holds both toggle and panel, so width changes push location button over */
+    /* Search control is button-sized when closed */
     #searchControl {
-      width: min(86vw, 420px);
+      display: inline-block;
+      width: auto; /* critical */
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
-    #searchToggle {
-      display: inline-flex;
+    /* When open, it becomes wide (this pushes location button over) */
+    #searchControl.open {
+      width: min(86vw, 420px);
     }
+
+    #searchToggle { display: inline-flex; }
 
     #searchPanel {
       display: none;
@@ -191,29 +195,19 @@
     }
 
     // ---- Map init (zoom controls top-right) ----
-    const map = L.map("map", {
-      scrollWheelZoom: false,
-      attributionControl: false,
-      zoomControl: false
-    });
-    L.control.zoom({ position: "topright" }).addTo(map);
+    const map = L.map("map", { scrollWheelZoom:false, attributionControl:false, zoomControl:false });
+    L.control.zoom({ position:"topright" }).addTo(map);
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png").addTo(map);
 
     // ---- District data ----
     let districtFeature = null;
     let districtBounds = null;
 
-    // ---- Marker (single marker reused) ----
+    // ---- Marker ----
     let marker = null;
     function placeMarker(latlng, color) {
       if (marker) map.removeLayer(marker);
-      marker = L.circleMarker(latlng, {
-        radius: 8,
-        color,
-        fillColor: color,
-        fillOpacity: 0.85,
-        weight: 2
-      }).addTo(map);
+      marker = L.circleMarker(latlng, { radius:8, color, fillColor:color, fillOpacity:0.85, weight:2 }).addTo(map);
     }
 
     function checkPoint(latlng) {
@@ -222,12 +216,11 @@
       return turf.booleanPointInPolygon(pt, districtFeature);
     }
 
-    // ---- Reset visibility logic ----
+    // ---- Reset visibility ----
     const resetBtn = document.getElementById("resetBtn");
     function updateResetVisibility() {
       if (!districtBounds) return;
-      const districtVisible = map.getBounds().intersects(districtBounds);
-      resetBtn.style.display = districtVisible ? "none" : "block";
+      resetBtn.style.display = map.getBounds().intersects(districtBounds) ? "none" : "block";
     }
     map.on("moveend zoomend", updateResetVisibility);
 
@@ -240,25 +233,17 @@
       }
     });
 
-    // ---- Apply chosen result (ONLY on click/Go/Enter) ----
+    // ---- Apply geocode result ----
     function applyGeocodeResult(result) {
       if (!result) return;
 
-      const lat = Number(result.lat);
-      const lon = Number(result.lon);
-      const latlng = L.latLng(lat, lon);
+      const latlng = L.latLng(Number(result.lat), Number(result.lon));
 
       if (result.boundingbox && result.boundingbox.length === 4) {
-        const bb = result.boundingbox.map(Number); // [south, north, west, east]
-        const bounds = L.latLngBounds(
-          L.latLng(bb[0], bb[2]),
-          L.latLng(bb[1], bb[3])
-        );
+        const bb = result.boundingbox.map(Number);
+        const bounds = L.latLngBounds(L.latLng(bb[0], bb[2]), L.latLng(bb[1], bb[3]));
 
-        if (!districtFeature) {
-          map.fitBounds(bounds);
-          return;
-        }
+        if (!districtFeature) { map.fitBounds(bounds); return; }
 
         const inside = checkPoint(latlng);
         if (inside) {
@@ -268,13 +253,10 @@
         } else {
           showMsg("Looks like that’s not in District 10. Try searching again.");
           placeMarker(latlng, "#d93025");
-          map.panTo(latlng, { animate: true });
+          map.panTo(latlng, { animate:true });
         }
       } else {
-        if (!districtFeature) {
-          map.setView(latlng, 13);
-          return;
-        }
+        if (!districtFeature) { map.setView(latlng, 13); return; }
         const inside = checkPoint(latlng);
         if (inside) {
           showMsg("✅ That’s in District 10.");
@@ -283,21 +265,21 @@
         } else {
           showMsg("Looks like that’s not in District 10. Try searching again.");
           placeMarker(latlng, "#d93025");
-          map.panTo(latlng, { animate: true });
+          map.panTo(latlng, { animate:true });
         }
       }
 
       updateResetVisibility();
     }
 
-    // ---- Search UI + Suggestions ----
+    // ---- Search + Suggestions ----
+    const topBar = document.getElementById("topBar");
+    const searchControl = document.getElementById("searchControl");
     const searchToggle = document.getElementById("searchToggle");
     const searchPanel  = document.getElementById("searchPanel");
     const searchInput  = document.getElementById("searchInput");
     const suggestions  = document.getElementById("suggestions");
     const goBtn        = document.getElementById("goBtn");
-    const topBar       = document.getElementById("topBar");
-    const searchControl = document.getElementById("searchControl");
 
     let lastResults = [];
     let debounceTimer = null;
@@ -311,22 +293,21 @@
     function openSearch() {
       searchToggle.style.display = "none";
       searchPanel.style.display = "block";
+      searchControl.classList.add("open");  // ✅ expand width only when open
       setTimeout(() => searchInput.focus(), 0);
     }
 
     function closeSearchPanel() {
       searchPanel.style.display = "none";
       searchToggle.style.display = "inline-flex";
+      searchControl.classList.remove("open"); // ✅ shrink width when closed
       clearSuggestions();
     }
 
     searchToggle.addEventListener("click", openSearch);
 
-    // Click off: close panel and suggestions
     document.addEventListener("mousedown", (e) => {
-      if (!topBar.contains(e.target)) {
-        closeSearchPanel();
-      }
+      if (!topBar.contains(e.target)) closeSearchPanel();
     });
 
     function renderSuggestions(results) {
@@ -348,17 +329,15 @@
         });
         suggestions.appendChild(div);
       }
-
       suggestions.style.display = "block";
     }
 
     async function fetchSuggestions(query) {
-      const VA_VIEWBOX = "-83.675,39.466,-75.242,36.540"; // left,top,right,bottom
+      const VA_VIEWBOX = "-83.675,39.466,-75.242,36.540";
       const url =
         "https://nominatim.openstreetmap.org/search" +
         "?format=json&addressdetails=1&limit=6" +
-        "&countrycodes=us" +
-        "&bounded=1" +
+        "&countrycodes=us&bounded=1" +
         "&viewbox=" + encodeURIComponent(VA_VIEWBOX) +
         "&q=" + encodeURIComponent(query);
 
@@ -390,10 +369,7 @@
       const q = searchInput.value.trim();
       clearTimeout(debounceTimer);
 
-      if (q.length < 3) {
-        clearSuggestions();
-        return;
-      }
+      if (q.length < 3) { clearSuggestions(); return; }
 
       debounceTimer = setTimeout(async () => {
         try {
@@ -413,13 +389,9 @@
 
     goBtn.addEventListener("click", doGoSearch);
 
-    // ---- Use My Location (now top bar right of Search) ----
+    // ---- Use My Location ----
     document.getElementById("locBtn").addEventListener("click", () => {
-      if (!navigator.geolocation) {
-        showMsg("Geolocation isn’t supported on this device/browser.");
-        return;
-      }
-
+      if (!navigator.geolocation) { showMsg("Geolocation isn’t supported on this device/browser."); return; }
       showMsg("Getting your location…");
 
       navigator.geolocation.getCurrentPosition(
@@ -427,10 +399,7 @@
           const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
           const inside = checkPoint(latlng);
 
-          if (inside === null) {
-            showMsg("District boundary not loaded yet.");
-            return;
-          }
+          if (inside === null) { showMsg("District boundary not loaded yet."); return; }
 
           if (inside) {
             showMsg("✅ Your location is in District 10.");
@@ -441,7 +410,6 @@
             placeMarker(latlng, "#d93025");
             map.setView(latlng, map.getZoom(), { animate: true });
           }
-
           updateResetVisibility();
         },
         (err) => {
@@ -461,28 +429,15 @@
       .then(res => res.json())
       .then(data => {
         districtFeature = data.features && data.features[0];
+        if (!districtFeature) { showMsg("District boundary failed to load."); return; }
 
-        if (!districtFeature) {
-          showMsg("District boundary failed to load.");
-          return;
-        }
-
-        const layer = L.geoJSON(data, {
-          style: { color: "#696b6d", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
-        }).addTo(map);
-
+        const layer = L.geoJSON(data, { style: { color:"#696b6d", weight:2, opacity:0.8, fillOpacity:0.1 } }).addTo(map);
         districtBounds = layer.getBounds();
         map.fitBounds(districtBounds);
 
-        setTimeout(() => {
-          map.invalidateSize();
-          updateResetVisibility();
-        }, 100);
+        setTimeout(() => { map.invalidateSize(); updateResetVisibility(); }, 100);
       })
-      .catch(err => {
-        console.error(err);
-        showMsg("Map failed to load.");
-      });
+      .catch(err => { console.error(err); showMsg("Map failed to load."); });
   </script>
 </body>
 </html>
