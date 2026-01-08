@@ -63,12 +63,13 @@
       pointer-events: none;
     }
 
-    /* Replace magnifying glass with text button */
+    /* --- Geocoder: show "Search" instead of magnifying glass --- */
     .leaflet-control-geocoder-icon {
       width: auto !important;
       background: none !important;
       text-indent: 0 !important;
     }
+
     .leaflet-control-geocoder-icon::after {
       content: "Search";
       font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -76,21 +77,27 @@
       padding: 4px 8px;
     }
 
-    /* Simple custom buttons container */
+    /* Optional: make the geocoder's expanded input a bit nicer */
+    .leaflet-control-geocoder-form input {
+      font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    /* --- Custom buttons bottom-right --- */
     #controls {
       position: fixed;
-      top: 52px; /* below geocoder input */
-      left: 10px;
+      bottom: 12px;
+      right: 10px;
       z-index: 9999;
       display: flex;
+      flex-direction: column;
       gap: 8px;
-      flex-wrap: wrap;
+      align-items: flex-end;
     }
 
     #controls button {
       appearance: none;
-      border: 1px solid #d0d0d0;
-      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(208, 208, 208, 0.95);
+      background: rgba(255, 255, 255, 0.75); /* ✅ slightly more transparent */
       padding: 8px 10px;
       border-radius: 10px;
       font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -139,7 +146,7 @@
     let districtFeature = null;
     let districtBounds = null;
 
-    // ---- Markers (single marker reused) ----
+    // ---- Marker (single marker reused) ----
     let marker = null;
 
     function placeMarker(latlng, color) {
@@ -160,11 +167,11 @@
       return turf.booleanPointInPolygon(pt, districtFeature);
     }
 
-    // ---- Geocoder ----
+    // ---- Geocoder (collapsed: shows only "Search", expands on click) ----
     L.Control.geocoder({
       placeholder: "Search address or place…",
       defaultMarkGeocode: false,
-      collapsed: false,
+      collapsed: true,   // ✅ shows just the button (now labeled "Search")
       geocoder: L.Control.Geocoder.nominatim({
         geocodingQueryParams: {
           countrycodes: "us",
@@ -185,23 +192,20 @@
 
       if (inside) {
         showMsg("✅ That’s in District 10.");
-        placeMarker(latlng, "#1e6cff"); // blue
+        placeMarker(latlng, "#1e6cff");
         map.fitBounds(e.geocode.bbox);
       } else {
         showMsg("Looks like that’s not in District 10. Try searching again.");
-        placeMarker(latlng, "#d93025"); // red
-        map.panTo(latlng, { animate: true }); // move map, no zoom
+        placeMarker(latlng, "#d93025");
+        map.panTo(latlng, { animate: true });
       }
     })
     .addTo(map);
 
     // ---- Buttons ----
     document.getElementById("resetBtn").addEventListener("click", () => {
-      if (districtBounds) {
-        map.fitBounds(districtBounds);
-      } else {
-        showMsg("District boundary not loaded yet.");
-      }
+      if (districtBounds) map.fitBounds(districtBounds);
+      else showMsg("District boundary not loaded yet.");
     });
 
     document.getElementById("locBtn").addEventListener("click", () => {
@@ -224,12 +228,12 @@
 
           if (inside) {
             showMsg("✅ Your location is in District 10.");
-            placeMarker(latlng, "#1e6cff"); // blue
+            placeMarker(latlng, "#1e6cff");
             map.setView(latlng, Math.max(map.getZoom(), 13), { animate: true });
           } else {
             showMsg("Looks like that’s not in District 10.");
-            placeMarker(latlng, "#d93025"); // red
-            map.setView(latlng, map.getZoom(), { animate: true }); // center only, keep zoom
+            placeMarker(latlng, "#d93025");
+            map.setView(latlng, map.getZoom(), { animate: true });
           }
         },
         (err) => {
