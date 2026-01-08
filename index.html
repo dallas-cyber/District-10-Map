@@ -16,22 +16,9 @@
   <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+    #map { position: fixed; inset: 0; width: 100%; height: 100%; }
 
-    #map {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-    }
-
-    /* Message bubble */
     #msg {
       position: fixed;
       top: 12px;
@@ -49,7 +36,6 @@
       box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     }
 
-    /* Copyright label */
     #copyright {
       position: fixed;
       bottom: 6px;
@@ -76,11 +62,10 @@
       padding: 4px 8px;
     }
 
-    /* Shared button styling */
     .map-btn {
       appearance: none;
       border: 1px solid rgba(208, 208, 208, 0.95);
-      background: rgba(255, 255, 255, 0.75); /* slightly transparent */
+      background: rgba(255, 255, 255, 0.75);
       padding: 8px 10px;
       border-radius: 10px;
       font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -117,10 +102,8 @@
   <div id="msg"></div>
   <div id="map"></div>
 
-  <!-- Bottom center reset (hidden until needed) -->
   <button id="resetBtn" class="map-btn" type="button">Reset to District 10</button>
 
-  <!-- Bottom-right controls -->
   <div id="controls">
     <button id="locBtn" class="map-btn" type="button">Use My Location</button>
   </div>
@@ -128,7 +111,6 @@
   <div id="copyright">© Wong For Congress</div>
 
   <script>
-    // ---- Message helpers ----
     const msgEl = document.getElementById("msg");
     let msgTimer = null;
 
@@ -139,27 +121,18 @@
       msgTimer = setTimeout(() => msgEl.style.display = "none", ms);
     }
 
-    // ---- Map init ----
-    const map = L.map("map", {
-      scrollWheelZoom: false,
-      attributionControl: false
-    });
-
+    const map = L.map("map", { scrollWheelZoom: false, attributionControl: false });
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png").addTo(map);
 
-    // ---- District data ----
     let districtFeature = null;
     let districtBounds = null;
 
-    // ---- Marker (single marker reused) ----
     let marker = null;
-
     function placeMarker(latlng, color) {
       if (marker) map.removeLayer(marker);
-
       marker = L.circleMarker(latlng, {
         radius: 8,
-        color: color,
+        color,
         fillColor: color,
         fillOpacity: 0.85,
         weight: 2
@@ -172,39 +145,44 @@
       return turf.booleanPointInPolygon(pt, districtFeature);
     }
 
-    // ---- Reset visibility logic ----
     const resetBtn = document.getElementById("resetBtn");
-
     function updateResetVisibility() {
       if (!districtBounds) return;
-      const districtVisible = map.getBounds().intersects(districtBounds);
-      resetBtn.style.display = districtVisible ? "none" : "block";
+      resetBtn.style.display = map.getBounds().intersects(districtBounds) ? "none" : "block";
     }
-
     map.on("moveend zoomend", updateResetVisibility);
 
-    // ---- Geocoder (suggestions while typing, but user must select/enter) ----
+    // ---- COMMIT GATE ----
+    // Only run markgeocode logic if user pressed Enter OR clicked a suggestion.
+    let userCommitted = false;
+
+    function withCommit(fn) {
+      return function(...args) {
+        if (!userCommitted) return;          // ignore auto-fired results
+        userCommitted = false;              // consume the commit
+        return fn.apply(this, args);
+      };
+    }
+
+    // ---- Geocoder ----
     const geocoderControl = L.Control.geocoder({
       placeholder: "Search address or place…",
       defaultMarkGeocode: false,
       collapsed: true,
       expand: "click",
 
-      // ✅ suggestions while typing (built-in)
+      // Suggestions while typing:
       suggestMinLength: 3,
-      suggestTimeout: 350,
+      suggestTimeout: 250,
 
-      // ✅ don’t auto-apply when only one match exists
+      // Try to avoid “auto-pick the only option” behavior:
       showUniqueResult: false,
 
       geocoder: L.Control.Geocoder.nominatim({
-        geocodingQueryParams: {
-          countrycodes: "us",
-          statecodes: "va"
-        }
+        geocodingQueryParams: { countrycodes: "us", statecodes: "va" }
       })
     })
-    .on("markgeocode", (e) => {
+    .on("markgeocode", withCommit((e) => {
       const center = e.geocode.center;
       const latlng = L.latLng(center.lat, center.lng);
 
@@ -226,8 +204,27 @@
       }
 
       updateResetVisibility();
-    })
+    }))
     .addTo(map);
+
+    // Hook Enter + dropdown click to set userCommitted = true
+    (function wireCommitTriggers() {
+      const input = geocoderControl && geocoderControl._input;
+      if (input) {
+        input.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") userCommitted = true;
+        });
+      }
+
+      // Dropdown suggestions container (event delegation)
+      const container = geocoderControl && geocoderControl.getContainer && geocoderControl.getContainer();
+      if (container) {
+        container.addEventListener("mousedown", (ev) => {
+          const alt = ev.target && ev.target.closest && ev.target.closest(".leaflet-control-geocoder-alternatives a");
+          if (alt) userCommitted = true;
+        }, true);
+      }
+    })();
 
     // ---- Buttons ----
     resetBtn.addEventListener("click", () => {
@@ -274,11 +271,7 @@
           else if (err.code === 2) showMsg("Location unavailable.");
           else showMsg("Couldn’t get your location.");
         },
-        {
-          enableHighAccuracy: true,
-          timeout: 8000,
-          maximumAge: 60000
-        }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
       );
     });
 
@@ -297,12 +290,7 @@
         }
 
         const layer = L.geoJSON(data, {
-          style: {
-            color: "#696b6d",
-            weight: 2,
-            opacity: 0.8,
-            fillOpacity: 0.1
-          }
+          style: { color: "#696b6d", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
         }).addTo(map);
 
         districtBounds = layer.getBounds();
