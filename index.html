@@ -183,11 +183,20 @@
 
     map.on("moveend zoomend", updateResetVisibility);
 
-    // ---- Geocoder (collapsed: "Search" button, expands on click) ----
+    // ---- Geocoder (suggestions while typing, but user must select/enter) ----
     const geocoderControl = L.Control.geocoder({
       placeholder: "Search address or place…",
       defaultMarkGeocode: false,
       collapsed: true,
+      expand: "click",
+
+      // ✅ suggestions while typing (built-in)
+      suggestMinLength: 3,
+      suggestTimeout: 350,
+
+      // ✅ don’t auto-apply when only one match exists
+      showUniqueResult: false,
+
       geocoder: L.Control.Geocoder.nominatim({
         geocodingQueryParams: {
           countrycodes: "us",
@@ -219,37 +228,6 @@
       updateResetVisibility();
     })
     .addTo(map);
-
-    // ---- Autocomplete while typing (debounced) ----
-    // This forces suggestion refresh as the user types, but DOES NOT auto-select/apply.
-    (function enableDebouncedSuggest() {
-      // Internal input element (Leaflet Control Geocoder exposes it)
-      const input = geocoderControl && geocoderControl._input;
-      if (!input) return;
-
-      let t = null;
-      let last = "";
-
-      input.addEventListener("input", () => {
-        const q = input.value.trim();
-
-        // don't spam the service on tiny inputs
-        if (q.length < 3) return;
-
-        // avoid repeating same query
-        if (q === last) return;
-        last = q;
-
-        clearTimeout(t);
-        t = setTimeout(() => {
-          // Trigger the control's built-in geocode/suggest refresh
-          // (still requires click on a suggestion or Enter to apply)
-          if (typeof geocoderControl._geocode === "function") {
-            geocoderControl._geocode();
-          }
-        }, 350);
-      });
-    })();
 
     // ---- Buttons ----
     resetBtn.addEventListener("click", () => {
