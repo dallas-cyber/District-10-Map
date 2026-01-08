@@ -31,7 +31,7 @@
       height: 100%;
     }
 
-    /* Message bubble (only shows when OUTSIDE district) */
+    /* Message bubble */
     #msg {
       position: fixed;
       top: 12px;
@@ -62,6 +62,20 @@
       border-radius: 4px;
       pointer-events: none;
     }
+
+    /* Replace magnifying glass with text button */
+    .leaflet-control-geocoder-icon {
+      width: auto !important;
+      background: none !important;
+      text-indent: 0 !important;
+    }
+
+    .leaflet-control-geocoder-icon::after {
+      content: "Search";
+      font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: #333;
+      padding: 4px 8px;
+    }
   </style>
 </head>
 
@@ -82,11 +96,6 @@
       msgTimer = setTimeout(() => msgEl.style.display = "none", ms);
     }
 
-    function hideMsg() {
-      msgEl.style.display = "none";
-      clearTimeout(msgTimer);
-    }
-
     // ---- Map init ----
     const map = L.map("map", {
       scrollWheelZoom: false,
@@ -97,7 +106,6 @@
 
     // ---- District data ----
     let districtFeature = null;
-    let districtBounds = null;
 
     // ---- Search marker ----
     let searchMarker = null;
@@ -118,6 +126,7 @@
     L.Control.geocoder({
       placeholder: "Search address or place…",
       defaultMarkGeocode: false,
+      collapsed: false,
       geocoder: L.Control.Geocoder.nominatim({
         geocodingQueryParams: {
           countrycodes: "us",
@@ -163,7 +172,7 @@
           return;
         }
 
-        const districtLayer = L.geoJSON(data, {
+        L.geoJSON(data, {
           style: {
             color: "#696b6d",
             weight: 2,
@@ -172,9 +181,7 @@
           }
         }).addTo(map);
 
-        districtBounds = districtLayer.getBounds();
-        map.fitBounds(districtBounds);
-
+        map.fitBounds(L.geoJSON(data).getBounds());
         setTimeout(() => map.invalidateSize(), 100);
       })
       .catch(err => {
