@@ -76,18 +76,6 @@
       padding: 4px 8px;
     }
 
-    /* Location button (bottom-right) */
-    #controls {
-      position: fixed;
-      bottom: 12px;
-      right: 10px;
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      align-items: flex-end;
-    }
-
     /* Shared button styling */
     .map-btn {
       appearance: none;
@@ -108,7 +96,19 @@
       left: 50%;
       transform: translateX(-50%);
       z-index: 9999;
-      display: none; /* hidden by default */
+      display: none;
+    }
+
+    /* Location button (bottom-right) */
+    #controls {
+      position: fixed;
+      bottom: 12px;
+      right: 10px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
     }
   </style>
 </head>
@@ -177,17 +177,14 @@
 
     function updateResetVisibility() {
       if (!districtBounds) return;
-
-      // If the current view doesn't intersect the district at all, show reset.
       const districtVisible = map.getBounds().intersects(districtBounds);
-
       resetBtn.style.display = districtVisible ? "none" : "block";
     }
 
     map.on("moveend zoomend", updateResetVisibility);
 
-    // ---- Geocoder (collapsed: only "Search" until clicked) ----
-    L.Control.geocoder({
+    // ---- Geocoder (collapsed: "Search" button, expands on click) ----
+    const geocoderControl = L.Control.geocoder({
       placeholder: "Search address or place…",
       defaultMarkGeocode: false,
       collapsed: true,
@@ -219,16 +216,45 @@
         map.panTo(latlng, { animate: true });
       }
 
-      // After any search movement, update reset button visibility
       updateResetVisibility();
     })
     .addTo(map);
+
+    // ---- Autocomplete while typing (debounced) ----
+    // This forces suggestion refresh as the user types, but DOES NOT auto-select/apply.
+    (function enableDebouncedSuggest() {
+      // Internal input element (Leaflet Control Geocoder exposes it)
+      const input = geocoderControl && geocoderControl._input;
+      if (!input) return;
+
+      let t = null;
+      let last = "";
+
+      input.addEventListener("input", () => {
+        const q = input.value.trim();
+
+        // don't spam the service on tiny inputs
+        if (q.length < 3) return;
+
+        // avoid repeating same query
+        if (q === last) return;
+        last = q;
+
+        clearTimeout(t);
+        t = setTimeout(() => {
+          // Trigger the control's built-in geocode/suggest refresh
+          // (still requires click on a suggestion or Enter to apply)
+          if (typeof geocoderControl._geocode === "function") {
+            geocoderControl._geocode();
+          }
+        }, 350);
+      });
+    })();
 
     // ---- Buttons ----
     resetBtn.addEventListener("click", () => {
       if (districtBounds) {
         map.fitBounds(districtBounds);
-        // It’ll auto-hide on moveend/zoomend, but this makes it feel instant
         resetBtn.style.display = "none";
       } else {
         showMsg("District boundary not loaded yet.");
