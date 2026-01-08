@@ -33,11 +33,11 @@
       box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     }
 
-    /* Copyright label */
+    /* Copyright label (bottom-right) */
     #copyright {
       position: fixed;
       bottom: 6px;
-      left: 8px;
+      right: 8px;
       z-index: 5000;
       font: 11px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color: #555;
@@ -51,7 +51,7 @@
     .map-btn {
       appearance: none;
       border: 1px solid rgba(208, 208, 208, 0.95);
-      background: rgba(255, 255, 255, 0.75); /* slightly transparent */
+      background: rgba(255, 255, 255, 0.75);
       padding: 8px 10px;
       border-radius: 10px;
       font: 13px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -70,16 +70,16 @@
       display: none;
     }
 
-    /* Location button (bottom-right) */
+    /* Location button (bottom-left) */
     #controls {
       position: fixed;
       bottom: 12px;
-      right: 10px;
+      left: 10px;
       z-index: 9999;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      align-items: flex-end;
+      align-items: flex-start;
     }
 
     /* --- Custom Search Control (top-left) --- */
@@ -88,7 +88,7 @@
       top: 12px;
       left: 12px;
       z-index: 9999;
-      width: min(86vw, 360px);
+      width: min(86vw, 380px);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
@@ -99,7 +99,6 @@
     }
 
     #searchPanel {
-      margin-top: 8px;
       display: none;
       background: rgba(255,255,255,0.92);
       border: 1px solid #ddd;
@@ -108,7 +107,33 @@
       overflow: hidden;
     }
 
+    /* Top bar inside panel (Close button) */
+    #panelTop {
+      display: flex;
+      justify-content: flex-end;
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+      background: rgba(255,255,255,0.70);
+    }
+
+    #closeSearch {
+      border: 0;
+      background: transparent;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      color: #333;
+    }
+
+    /* Input row with Go button */
+    #searchRow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
     #searchInput {
+      flex: 1;
       width: 100%;
       box-sizing: border-box;
       border: 0;
@@ -117,6 +142,18 @@
       font-size: 14px;
       background: transparent;
     }
+
+    #goBtn {
+      border: 0;
+      border-left: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.0);
+      padding: 10px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #333;
+    }
+
+    #goBtn:hover { background: rgba(0,0,0,0.04); }
 
     #suggestions {
       border-top: 1px solid rgba(0,0,0,0.07);
@@ -132,9 +169,7 @@
       line-height: 1.25;
     }
 
-    .suggestion:hover {
-      background: rgba(0,0,0,0.05);
-    }
+    .suggestion:hover { background: rgba(0,0,0,0.05); }
 
     .hint {
       padding: 8px 12px;
@@ -154,16 +189,24 @@
     <button id="searchToggle" class="map-btn" type="button">Search</button>
 
     <div id="searchPanel" aria-label="Search panel">
-      <input id="searchInput" type="text" placeholder="Search address or place…" autocomplete="off" />
+      <div id="panelTop">
+        <button id="closeSearch" type="button" aria-label="Close search">✕</button>
+      </div>
+
+      <div id="searchRow">
+        <input id="searchInput" type="text" placeholder="Search address or place…" autocomplete="off" />
+        <button id="goBtn" type="button" aria-label="Go">Go</button>
+      </div>
+
       <div id="suggestions"></div>
-      <div class="hint">Tip: Click a suggestion or press Enter.</div>
+      <div class="hint">Tip: Click a suggestion or press Go</div>
     </div>
   </div>
 
   <!-- Bottom center reset -->
   <button id="resetBtn" class="map-btn" type="button">Reset to District 10</button>
 
-  <!-- Bottom-right controls -->
+  <!-- Bottom-left controls -->
   <div id="controls">
     <button id="locBtn" class="map-btn" type="button">Use My Location</button>
   </div>
@@ -181,8 +224,14 @@
       msgTimer = setTimeout(() => msgEl.style.display = "none", ms);
     }
 
-    // ---- Map init ----
-    const map = L.map("map", { scrollWheelZoom: false, attributionControl: false });
+    // ---- Map init (zoom controls top-right) ----
+    const map = L.map("map", {
+      scrollWheelZoom: false,
+      attributionControl: false,
+      zoomControl: false
+    });
+    L.control.zoom({ position: "topright" }).addTo(map);
+
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png").addTo(map);
 
     // ---- District data ----
@@ -226,7 +275,7 @@
       }
     });
 
-    // ---- Apply a chosen geocode result (ONLY called on click/Enter) ----
+    // ---- Apply chosen result (ONLY on click/Go/Enter) ----
     function applyGeocodeResult(result) {
       if (!result) return;
 
@@ -234,14 +283,13 @@
       const lon = Number(result.lon);
       const latlng = L.latLng(lat, lon);
 
-      // Build bounds if we have them
       if (result.boundingbox && result.boundingbox.length === 4) {
         const bb = result.boundingbox.map(Number); // [south, north, west, east]
         const bounds = L.latLngBounds(
           L.latLng(bb[0], bb[2]),
           L.latLng(bb[1], bb[3])
         );
-        // inside -> fit bounds, outside -> pan only
+
         if (!districtFeature) {
           map.fitBounds(bounds);
           return;
@@ -258,7 +306,6 @@
           map.panTo(latlng, { animate: true });
         }
       } else {
-        // Fallback if no bbox
         if (!districtFeature) {
           map.setView(latlng, 13);
           return;
@@ -281,22 +328,28 @@
     // ---- Custom Search UI + Suggestions ----
     const searchToggle = document.getElementById("searchToggle");
     const searchPanel  = document.getElementById("searchPanel");
+    const closeSearch  = document.getElementById("closeSearch");
     const searchInput  = document.getElementById("searchInput");
     const suggestions  = document.getElementById("suggestions");
+    const goBtn        = document.getElementById("goBtn");
 
     let lastResults = [];
     let debounceTimer = null;
 
     function openSearch() {
+      searchToggle.style.display = "none";     // ✅ hide the initial Search button
       searchPanel.style.display = "block";
       setTimeout(() => searchInput.focus(), 0);
     }
-    function toggleSearch() {
-      const open = searchPanel.style.display === "block";
-      searchPanel.style.display = open ? "none" : "block";
-      if (!open) setTimeout(() => searchInput.focus(), 0);
+
+    function closeSearchPanel() {
+      searchPanel.style.display = "none";
+      searchToggle.style.display = "inline-flex"; // ✅ bring Search button back
+      clearSuggestions();
     }
-    searchToggle.addEventListener("click", toggleSearch);
+
+    searchToggle.addEventListener("click", openSearch);
+    closeSearch.addEventListener("click", closeSearchPanel);
 
     function clearSuggestions() {
       suggestions.innerHTML = "";
@@ -318,10 +371,8 @@
         div.className = "suggestion";
         div.textContent = r.display_name || "Result";
         div.addEventListener("click", () => {
-          applyGeocodeResult(r); // ✅ only apply on click
-          // keep panel open or close it? closing is less clutter
-          searchPanel.style.display = "none";
-          clearSuggestions();
+          applyGeocodeResult(r);
+          closeSearchPanel();
         });
         suggestions.appendChild(div);
       }
@@ -330,7 +381,6 @@
     }
 
     async function fetchSuggestions(query) {
-      // Virginia-ish viewbox, to keep results sane
       const VA_VIEWBOX = "-83.675,39.466,-75.242,36.540"; // left,top,right,bottom
       const url =
         "https://nominatim.openstreetmap.org/search" +
@@ -340,11 +390,28 @@
         "&viewbox=" + encodeURIComponent(VA_VIEWBOX) +
         "&q=" + encodeURIComponent(query);
 
-      const res = await fetch(url, {
-        headers: { "Accept": "application/json" }
-      });
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
       if (!res.ok) return [];
       return await res.json();
+    }
+
+    async function doGoSearch() {
+      const q = searchInput.value.trim();
+      if (q.length < 3) return;
+
+      if (lastResults.length) {
+        applyGeocodeResult(lastResults[0]);
+        closeSearchPanel();
+        return;
+      }
+
+      try {
+        const results = await fetchSuggestions(q);
+        if (results && results.length) {
+          applyGeocodeResult(results[0]);
+          closeSearchPanel();
+        }
+      } catch (e) {}
     }
 
     searchInput.addEventListener("input", () => {
@@ -359,43 +426,22 @@
       debounceTimer = setTimeout(async () => {
         try {
           const results = await fetchSuggestions(q);
-          // Suggestions update while typing, but do NOT apply
           renderSuggestions(results);
         } catch (e) {
-          // silently fail; better than spamming users with errors
           clearSuggestions();
         }
       }, 300);
     });
 
-    // Enter: apply top suggestion if available, otherwise do a one-off search
-    searchInput.addEventListener("keydown", async (e) => {
+    searchInput.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-
-      const q = searchInput.value.trim();
-      if (q.length < 3) return;
-
-      // If suggestions exist, apply the first one on Enter (explicit user action)
-      if (lastResults.length) {
-        applyGeocodeResult(lastResults[0]);
-        searchPanel.style.display = "none";
-        clearSuggestions();
-        return;
-      }
-
-      // Otherwise, do a one-time lookup and apply top hit (still Enter-driven)
-      try {
-        const results = await fetchSuggestions(q);
-        if (results && results.length) {
-          applyGeocodeResult(results[0]);
-          searchPanel.style.display = "none";
-          clearSuggestions();
-        }
-      } catch (e2) {}
+      doGoSearch();
     });
 
-    // Close suggestions if user clicks outside the search panel
+    goBtn.addEventListener("click", doGoSearch);
+
+    // If user clicks outside, just hide suggestions (panel stays open)
     document.addEventListener("mousedown", (e) => {
       const inside = document.getElementById("searchControl").contains(e.target);
       if (!inside) clearSuggestions();
@@ -448,8 +494,7 @@
     fetch(geojsonUrl)
       .then(res => res.json())
       .then(data => {
-        const feat = data.features && data.features[0];
-        districtFeature = feat;
+        districtFeature = data.features && data.features[0];
 
         if (!districtFeature) {
           showMsg("District boundary failed to load.");
@@ -457,12 +502,7 @@
         }
 
         const layer = L.geoJSON(data, {
-          style: {
-            color: "#696b6d",
-            weight: 2,
-            opacity: 0.8,
-            fillOpacity: 0.1
-          }
+          style: { color: "#696b6d", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
         }).addTo(map);
 
         districtBounds = layer.getBounds();
