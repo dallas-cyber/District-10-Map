@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
-  <!-- Turf.js (for “is this point inside the district?”) -->
+  <!-- Turf.js (point-in-polygon) -->
   <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
   <style>
@@ -24,7 +24,6 @@
       overflow: hidden;
     }
 
-    /* Map fills the viewport exactly */
     #map {
       position: fixed;
       inset: 0;
@@ -32,7 +31,7 @@
       height: 100%;
     }
 
-    /* Little message bubble */
+    /* Message bubble (only used for out-of-district) */
     #msg {
       position: fixed;
       top: 12px;
@@ -57,7 +56,7 @@
   <div id="map"></div>
 
   <script>
-    // --- Helpers ---
+    // ---- Helpers ----
     const msgEl = document.getElementById("msg");
     let msgTimer = null;
 
@@ -70,7 +69,12 @@
       }, ms);
     }
 
-    // --- Map init ---
+    function hideMsg() {
+      msgEl.style.display = "none";
+      clearTimeout(msgTimer);
+    }
+
+    // ---- Map init ----
     const map = L.map("map", {
       scrollWheelZoom: false,
       attributionControl: false
@@ -78,15 +82,26 @@
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png").addTo(map);
 
-    // We'll store the VA-10 polygon feature here for Turf checks
+    // ---- Marker styles ----
+    const redIcon = new L.Icon({
+      iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    });
+
+    let searchMarker = null;
+
+    // ---- District storage ----
     let districtFeature = null;
     let districtBounds = null;
 
-    // --- Geocoder (search box) ---
-    // IMPORTANT: We intercept the result and only allow zoom if inside district.
+    // ---- Geocoder ----
     L.Control.geocoder({
       placeholder: "Search address or place…",
-      defaultMarkGeocode: false, // we handle it ourselves
+      defaultMarkGeocode: false,
       geocoder: L.Control.Geocoder.nominatim({
         geocodingQueryParams: {
           countrycodes: "us",
@@ -95,40 +110,55 @@
       })
     })
     .on("markgeocode", (e) => {
-      // If district isn't loaded yet, allow normal behavior (rare)
+      const center = e.geocode.center; // Leaflet LatLng
+      const latlng = L.latLng(center.lat, center.lng);
+
+      // If district isn't loaded yet, just behave normally.
       if (!districtFeature) {
         map.fitBounds(e.geocode.bbox);
         return;
       }
 
-      const center = e.geocode.center; // Leaflet LatLng
       const pt = turf.point([center.lng, center.lat]);
-
       const inside = turf.booleanPointInPolygon(pt, districtFeature);
 
+      // Clear any old marker
+      if (searchMarker) {
+        map.removeLayer(searchMarker);
+        searchMarker = null;
+      }
+
       if (inside) {
-        // Optional: drop a marker where they searched
-        if (window._searchMarker) map.removeLayer(window._searchMarker);
-        window._searchMarker = L.marker([center.lat, center.lng]).addTo(map);
+        // ✅ In-district: no message. Normal zoom behavior.
+        hideMsg();
+
+        // Optional: you can drop a normal marker if you want.
+        // If you truly want NOTHING, leave this commented out.
+        // searchMarker = L.marker(latlng).addTo(map);
 
         map.fitBounds(e.geocode.bbox);
-        showMsg("✅ That’s in VA-10.");
       } else {
-        showMsg("Looks like that’s not in VA-10. Try respelling or search a nearby town/address.");
-        // Optional: snap back to district view (uncomment if you want)
-        // if (districtBounds) map.fitBounds(districtBounds);
+        // ❌ Out-of-district:
+        // - show message
+        // - do NOT zoom (keep current zoom)
+        // - recenter map so the searched location is centered
+        // - add red marker
+        showMsg("Looks like that’s not in District 10. Try searching again.");
+
+        map.panTo(latlng, { animate: true });
+
+        searchMarker = L.marker(latlng, { icon: redIcon }).addTo(map);
       }
     })
     .addTo(map);
 
-    // --- District boundary fetch ---
+    // ---- Load District 10 boundary ----
     const geojsonUrl =
       "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_ACS2022/MapServer/50/query?where=STATE%3D%2751%27%20AND%20CD118%3D%2710%27&outFields=*&returnGeometry=true&f=geojson&outSR=4326";
 
     fetch(geojsonUrl)
       .then(res => res.json())
       .then(data => {
-        // The query should return a single feature (VA-10)
         districtFeature = data.features && data.features[0];
 
         if (!districtFeature) {
