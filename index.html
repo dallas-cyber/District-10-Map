@@ -71,7 +71,7 @@
       display: none;
     }
 
-    /* ---- TOP BAR: Search + Location ---- */
+    /* ---- TOP BAR: Search only ---- */
     #topBar {
       position: fixed;
       top: 12px;
@@ -108,7 +108,7 @@
       align-items: center;
     }
 
-    /* ⬇ Desktop size */
+    /* Desktop font size */
     #searchInput {
       flex: 1;
       border: none;
@@ -118,7 +118,7 @@
       background: transparent;
     }
 
-    /* ⬇ iOS Safari fix: prevent zoom */
+    /* iOS Safari zoom fix */
     @supports (-webkit-touch-callout: none) {
       #searchInput { font-size: 16px; }
     }
@@ -163,7 +163,7 @@
   <div id="msg"></div>
   <div id="map"></div>
 
-  <!-- Top bar -->
+  <!-- Top bar: Search -->
   <div id="topBar">
     <div id="searchControl">
       <button id="searchToggle" class="map-btn" type="button">Search</button>
@@ -177,11 +177,11 @@
         <div class="hint">Tip: Click a suggestion or press Go</div>
       </div>
     </div>
-
-    <button id="locBtn" class="map-btn" type="button">Use My Location</button>
   </div>
 
+  <!-- Reset -->
   <button id="resetBtn" class="map-btn" type="button">Reset to District 10</button>
+
   <div id="copyright">© Wong For Congress</div>
 
   <script>
@@ -204,7 +204,13 @@
 
     function placeMarker(latlng, color) {
       if (marker) map.removeLayer(marker);
-      marker = L.circleMarker(latlng, { radius:8, color, fillColor:color, fillOpacity:0.85, weight:2 }).addTo(map);
+      marker = L.circleMarker(latlng, {
+        radius:8,
+        color,
+        fillColor:color,
+        fillOpacity:0.85,
+        weight:2
+      }).addTo(map);
     }
 
     function checkPoint(latlng) {
@@ -258,7 +264,8 @@
 
     async function fetchSuggestions(q) {
       const VA_VIEWBOX = "-83.675,39.466,-75.242,36.540";
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=us&bounded=1&viewbox=${VA_VIEWBOX}&q=${encodeURIComponent(q)}`;
+      const url =
+        `https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=us&bounded=1&viewbox=${VA_VIEWBOX}&q=${encodeURIComponent(q)}`;
       const res = await fetch(url);
       return res.ok ? res.json() : [];
     }
@@ -266,7 +273,10 @@
     function renderSuggestions(list) {
       suggestions.innerHTML = "";
       lastResults = list;
-      if (!list.length) { suggestions.style.display = "none"; return; }
+      if (!list.length) {
+        suggestions.style.display = "none";
+        return;
+      }
 
       list.forEach(r => {
         const div = document.createElement("div");
@@ -296,7 +306,10 @@
         showMsg("✅ That’s in District 10.");
         placeMarker(latlng, "#1e6cff");
         if (r.boundingbox) {
-          map.fitBounds([[r.boundingbox[0], r.boundingbox[2]],[r.boundingbox[1], r.boundingbox[3]]]);
+          map.fitBounds([
+            [r.boundingbox[0], r.boundingbox[2]],
+            [r.boundingbox[1], r.boundingbox[3]]
+          ]);
         } else map.setView(latlng, 13);
       } else {
         showMsg("Looks like that’s not in District 10. Try searching again.");
@@ -309,33 +322,34 @@
     searchInput.oninput = () => {
       const q = searchInput.value.trim();
       clearTimeout(debounceTimer);
-      if (q.length < 3) { suggestions.style.display = "none"; return; }
+      if (q.length < 3) {
+        suggestions.style.display = "none";
+        return;
+      }
 
       debounceTimer = setTimeout(async () => {
         renderSuggestions(await fetchSuggestions(q));
       }, 300);
     };
 
-    searchInput.onkeydown = e => { if (e.key === "Enter") goBtn.click(); };
-    goBtn.onclick = () => lastResults.length && applyResult(lastResults[0]);
-
-    document.getElementById("locBtn").onclick = () => {
-      if (!navigator.geolocation) return showMsg("Geolocation not supported.");
-      showMsg("Getting your location…");
-      navigator.geolocation.getCurrentPosition(pos => {
-        const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
-        applyResult({ lat: latlng.lat, lon: latlng.lng });
-      });
+    searchInput.onkeydown = e => {
+      if (e.key === "Enter") goBtn.click();
     };
+    goBtn.onclick = () => lastResults.length && applyResult(lastResults[0]);
 
     fetch("https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_ACS2022/MapServer/50/query?where=STATE%3D%2751%27%20AND%20CD118%3D%2710%27&outFields=*&returnGeometry=true&f=geojson&outSR=4326")
       .then(r => r.json())
       .then(d => {
         districtFeature = d.features[0];
-        const layer = L.geoJSON(d, { style:{ color:"#696b6d", weight:2, opacity:.8, fillOpacity:.1 } }).addTo(map);
+        const layer = L.geoJSON(d, {
+          style:{ color:"#696b6d", weight:2, opacity:.8, fillOpacity:.1 }
+        }).addTo(map);
         districtBounds = layer.getBounds();
         map.fitBounds(districtBounds);
-        setTimeout(() => { map.invalidateSize(); updateResetVisibility(); }, 100);
+        setTimeout(() => {
+          map.invalidateSize();
+          updateResetVisibility();
+        }, 100);
       });
   </script>
 </body>
